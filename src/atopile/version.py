@@ -41,11 +41,30 @@ def parse(version_str: str) -> Version:
     try:
         version = Version.parse(version_str)
     except ValueError:
+        # Handle incomplete versions (e.g., "0.0" -> "0.0.0")
         dot_split = version_str.split(".")
-        version_str = "-".join(
-            ".".join(fragments) for fragments in (dot_split[:3], dot_split[3:])
-        )
-        version = Version.parse(version_str)
+        
+        # Ensure we have at least 3 parts (major.minor.patch)
+        while len(dot_split) < 3:
+            dot_split.append("0")
+        
+        # Separate version core (first 3 parts) from prerelease/build metadata
+        version_core = ".".join(dot_split[:3])
+        metadata_parts = dot_split[3:]
+        
+        # Reconstruct version string with "-" separator for prerelease/build
+        if metadata_parts:
+            # Join metadata parts with "." and prepend with "-"
+            metadata_str = "-" + ".".join(metadata_parts)
+            version_str = version_core + metadata_str
+        else:
+            version_str = version_core
+        
+        try:
+            version = Version.parse(version_str)
+        except ValueError:
+            # If still failing, try with just the core version
+            version = Version.parse(version_core)
 
     return version
 
@@ -189,24 +208,32 @@ def match(spec: str, version: Version) -> bool:
 
 
 def check_for_update() -> None:
-    installed_version = get_installed_atopile_version()
-    latest_version = get_latest_atopile_version()
-    installed_version_clean = clean_version(installed_version)
+    """
+    Check for updates and log warnings/info if needed.
+    Gracefully handles version parsing errors to avoid crashing the CLI.
+    """
+    try:
+        installed_version = get_installed_atopile_version()
+        latest_version = get_latest_atopile_version()
+        installed_version_clean = clean_version(installed_version)
 
-    if latest_version is None:
-        return
+        if latest_version is None:
+            return
 
-    if installed_version < latest_version:
-        log.warning(
-            "Your version of atopile (%s) is out-of-date. Latest version: %s.\n"
-            "You can find upgrade instructions here: %s",
-            installed_version_clean,
-            latest_version,
-            UPGRADE_DOCS_URL,
-        )
-    elif installed_version > latest_version:
-        log.info(
-            "Current version (%s) is newer than latest (%s)",
-            installed_version_clean,
-            latest_version,
-        )
+        if installed_version < latest_version:
+            log.warning(
+                "Your version of atopile (%s) is out-of-date. Latest version: %s.\n"
+                "You can find upgrade instructions here: %s",
+                installed_version_clean,
+                latest_version,
+                UPGRADE_DOCS_URL,
+            )
+        elif installed_version > latest_version:
+            log.info(
+                "Current version (%s) is newer than latest (%s)",
+                installed_version_clean,
+                latest_version,
+            )
+    except Exception:
+        # If version parsing fails, log debug info but don't crash the CLI
+        log.debug("Failed to check for updates", exc_info=True)
