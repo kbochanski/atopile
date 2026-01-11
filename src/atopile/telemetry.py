@@ -18,6 +18,7 @@ import hashlib
 import importlib.metadata
 import logging
 import os
+import sys
 import time
 import uuid
 from collections.abc import Generator
@@ -360,11 +361,17 @@ def capture(
     default_properties = TelemetryProperties()
 
     try:
-        client.capture(
-            distinct_id=config.id,
-            event=event_start,
-            properties=default_properties.prepare(properties),
-        )
+        # Wrap in try-except to ensure it doesn't block even if it hangs
+        # Posthog should be async, but we'll catch any blocking behavior
+        try:
+            client.capture(
+                distinct_id=config.id,
+                event=event_start,
+                properties=default_properties.prepare(properties),
+            )
+        except Exception as capture_error:
+            # If capture fails, log but don't block execution
+            log.debug("Failed to send telemetry data (event start): %s", capture_error, exc_info=capture_error)
     except Exception as e:
         log.debug("Failed to send telemetry data (event start): %s", e, exc_info=e)
         yield

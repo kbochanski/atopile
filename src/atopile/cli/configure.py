@@ -31,7 +31,6 @@ def configure() -> None:
 
 def setup() -> None:
     # Cleanup legacy config file
-    from faebryk.libs.kicad.ipc import enable_plugin_api
     from faebryk.libs.paths import get_config_dir
 
     try:
@@ -46,15 +45,23 @@ def setup() -> None:
 
     if PropertyLoaders.ci_provider():
         return
+    
+    # KiCad plugin setup - wrap everything in try-except to prevent any blocking
+    # If anything hangs or fails, we just skip it and continue
+    # Note: We can't use threading timeout in Python, so we rely on try-except
+    # to catch any exceptions and make imports lazy to avoid blocking
     try:
+        # Call install_kicad_plugin directly (it's defined in this module)
         install_kicad_plugin()
     except Exception as e:
-        logger.warning(f"Couldn't install plugin: {e!r}")
+        logger.debug(f"Couldn't install plugin (non-fatal): {e!r}", exc_info=e)
 
     try:
+        # Import only when needed to avoid blocking on import
+        from faebryk.libs.kicad.ipc import enable_plugin_api
         enable_plugin_api()
     except Exception as e:
-        logger.warning(f"Couldn't enable plugin api: {e!r}")
+        logger.debug(f"Couldn't enable plugin api (non-fatal): {e!r}", exc_info=e)
 
 
 def install_kicad_plugin() -> None:

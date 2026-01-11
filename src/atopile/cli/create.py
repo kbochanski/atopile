@@ -69,7 +69,13 @@ def _open_in_editor_or_print_path(path: Path):
         # open in vscode / cursor
         subprocess.Popen([code_bin, path])
     else:
-        rich_print_robust(f" \n[cyan]cd {path.relative_to(Path.cwd())}[/cyan]")
+        # Use absolute path if relative path would fail
+        try:
+            rel_path = path.relative_to(Path.cwd())
+            rich_print_robust(f" \n[cyan]cd {rel_path}[/cyan]")
+        except ValueError:
+            # Path is not a subpath of current directory, use absolute path
+            rich_print_robust(f" \n[cyan]cd {path}[/cyan]")
 
 
 stuck_user_helper_generator = _stuck_user_helper()
@@ -108,12 +114,19 @@ def query_helper[T: str | Path | bool](
         case Path():
 
             def querier() -> Path:  # type: ignore
-                return Path(
-                    questionary.path(
-                        "",
-                        default=str(default or ""),
-                    ).unsafe_ask()
-                )
+                # Use built-in input() instead of questionary for Path queries
+                # questionary.path() creates an interactive file browser that can hang
+                # questionary.text() can also hang in some terminal environments
+                # Using input() is more reliable and simpler for path entry
+                default_str = str(default or "")
+                if default_str:
+                    prompt_text = f"Enter path [{default_str}]: "
+                else:
+                    prompt_text = "Enter path: "
+                
+                print(prompt_text, end="", flush=True)
+                result_str = input().strip() or default_str
+                return Path(result_str)
 
         case bool():
 

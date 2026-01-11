@@ -144,8 +144,22 @@ def cli(
 
     if ctx.invoked_subcommand:
         check_for_update()
-
-    configure.setup()
+        
+        # Skip KiCad setup for commands that don't need it to avoid hanging
+        # Commands like 'create' don't need KiCad
+        skip_kicad_setup = ctx.invoked_subcommand in ("create", "dependencies", "add", "remove", "sync")
+        
+        if not skip_kicad_setup:
+            configure.setup()
+        else:
+            # Still do basic setup (cleanup legacy config) but skip KiCad plugin
+            from faebryk.libs.paths import get_config_dir
+            try:
+                _LEGACY_CFG_PATH = get_config_dir() / "configured_for.yaml"
+                if _LEGACY_CFG_PATH.exists():
+                    _LEGACY_CFG_PATH.unlink()
+            except Exception:
+                pass
 
 
 app.command()(build.build)
